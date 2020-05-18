@@ -74,7 +74,8 @@ wpp_to_timetable <- function(path) {
             mutate(total_minutos = (as.numeric(timediff) - total_horas) * 60) %>% 
             mutate(fmt = glue::glue("{total_horas}h{round(total_minutos)}")) %>% 
             mutate_at(vars(entrada, saida), strftime, format = "%H:%M", tz = "UTC") %>% 
-            rename(tempo_total = fmt) %>% 
-            select(-timediff, -total_horas, -total_minutos)
+            rename(tempo_total = fmt)
+        # %>% 
+        #     select(-timediff, -total_horas, -total_minutos)
     )
 }
