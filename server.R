@@ -13,28 +13,51 @@ source("utils.R")
 
 shinyServer(function(input, output) {
     
+    customized_table <- function(.tbl) {
+        DT::datatable(
+            data = .tbl,
+            filter = "top",
+            options = list(
+                dom = "t",
+                pageLength = 10,
+                autoWidth = TRUE
+            )
+        )
+    }
+    
     timetable <- reactive({
         if (is.null(input$file)) return(NULL)
         req(input$file)
         wpp_to_timetable(input$file$datapath)
     })
     
+    contacts <- reactive({
+        req(input$file)
+        unique(timetable()$nome)
+    })
+    
+    messages <- reactive({
+        req(input$file)
+        nrow(timetable())
+    })
+    
     output$timetable <- DT::renderDataTable({
-        timetable()
+        customized_table(timetable())
     })
     
     output$timetable_agg <- DT::renderDataTable({
         timetable() %>% 
             group_by(nome) %>% 
-            summarise_at(vars(total_horas, total_minutos), sum, na.rm = TRUE)
+            summarise_at(vars(total_horas, total_minutos), sum, na.rm = TRUE) %>% 
+            customized_table()
     })
     
     output$downloadData <- downloadHandler(
         filename = function() {
             paste("timetable-", Sys.Date(), '.xlsx', sep = '')
         },
-        content = function(con) {
-            writexl::write_xlsx(timetable(), con)
+        content = function(x, con) {
+            writexl::write_xlsx(x, con)
         }
     )
     
@@ -44,22 +67,21 @@ shinyServer(function(input, output) {
                     selected = TRUE,
                     
                     tabPanel("Geral",
-                             DT::dataTableOutput("timetable"),
-                             
-                             tags$br(),
-                             
-                             # Download XLSX button
-                             downloadButton("downloadData", "Download XLSX")
+                             column(DT::dataTableOutput("timetable"),
+                                    
+                                    # Download XLSX button
+                                    downloadButton("downloadData", "Download XLSX"),
+                             width = 6)
                     ),
                     
                     tabPanel("Agregado",
-                             DT::dataTableOutput("timetable_agg"),
-                             
-                             tags$br(),
-                             
-                             # Download XLSX button
-                             downloadButton("downloadData", "Download XLSX")
+                             column(DT::dataTableOutput("timetable_agg"),
+                                    
+                                    # Download XLSX button
+                                    downloadButton("downloadData", "Download XLSX"),
+                                    width = 6)
                     )
         )
     })
+    
 })
