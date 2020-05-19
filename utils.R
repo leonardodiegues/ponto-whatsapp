@@ -79,3 +79,15 @@ wpp_to_timetable <- function(path) {
         #     select(-timediff, -total_horas, -total_minutos)
     )
 }
+
+value_box <- function(texto, cor, icon, id){
+    HTML(paste0('<a id="', id,'" href="#" class="action-button">
+                  <div class = "value-box" style = "background-color:', cor, ';"> 
+                  <span class = "name">', texto, '</span>
+                  <div class="img_block">
+                    <div class="img_block_container">
+                      <img src="img/',icon,'">
+                    </div>
+                  </div>
+              </div></a>'))
+}
