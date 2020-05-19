@@ -9,7 +9,7 @@
 library(shiny)
 library(DT)
 
-source("utils.R")
+source(here::here("utils.R"))
 
 shinyServer(function(input, output) {
     
