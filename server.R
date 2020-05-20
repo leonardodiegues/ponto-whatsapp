@@ -19,8 +19,8 @@ shinyServer(function(input, output) {
             data = .tbl,
             filter = "top",
             options = list(
-                dom = "t",
-                pageLength = 10,
+                dom = "tp",
+                pageLength = 20,
                 autoWidth = TRUE
             )
         )
@@ -65,8 +65,8 @@ shinyServer(function(input, output) {
         content = function(con) {
             writexl::write_xlsx(
                 x = list(
-                    "geral" = timetable(),
-                    "agregado" = timetable_agg()
+                    "Geral" = timetable(),
+                    "Agregado" = timetable_agg()
                 ),
                 path = con
             )
@@ -82,7 +82,7 @@ shinyServer(function(input, output) {
                              column(DT::dataTableOutput("timetable"),
                                     
                                     # Download XLSX button
-                                    downloadButton("downloadData", "Download XLSX"),
+                                    downloadButton("downloadData", "Download XLSX completo"),
                              width = 6)
                     ),
                     
@@ -90,7 +90,7 @@ shinyServer(function(input, output) {
                              column(DT::dataTableOutput("timetable_agg"),
                                     
                                     # Download XLSX button
-                                    downloadButton("downloadData", "Download XLSX"),
+                                    downloadButton("downloadData", "Download XLSX completo"),
                                     width = 6)
                     )
         )
