@@ -39,3 +39,7 @@ vignettes/*.pdf
 .Renviron
 
 # Ignore data files
+data/*
+
+# rsconnect
+rsconnect/*
