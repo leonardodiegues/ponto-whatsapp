@@ -7,9 +7,10 @@
 #
 
 library(shiny)
+library(here)
 library(DT)
 
-source(here::here("utils.R"))
+source(here("utils.R"))
 
 shinyServer(function(input, output) {
     
@@ -31,6 +32,14 @@ shinyServer(function(input, output) {
         wpp_to_timetable(input$file$datapath)
     })
     
+    timetable_agg <- reactive({
+        if (is.null(input$file)) return(NULL)
+        req(input$file)
+        timetable() %>% 
+            group_by(mes, ano, nome) %>% 
+            summarise_at(vars(total_horas, total_minutos), sum, na.rm = TRUE)
+    })
+    
     contacts <- reactive({
         req(input$file)
         unique(timetable()$nome)
@@ -46,18 +55,21 @@ shinyServer(function(input, output) {
     })
     
     output$timetable_agg <- DT::renderDataTable({
-        timetable() %>% 
-            group_by(mes, ano, nome) %>% 
-            summarise_at(vars(total_horas, total_minutos), sum, na.rm = TRUE) %>%
-            customized_table()
+        customized_table(timetable_agg())
     })
     
     output$downloadData <- downloadHandler(
         filename = function() {
             paste("timetable-", Sys.Date(), '.xlsx', sep = '')
         },
-        content = function(x, con) {
-            writexl::write_xlsx(x, con)
+        content = function(con) {
+            writexl::write_xlsx(
+                x = list(
+                    "geral" = timetable(),
+                    "agregado" = timetable_agg()
+                ),
+                path = con
+            )
         }
     )
     
