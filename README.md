@@ -1,7 +1,7 @@
 # [ponto-whatsapp](https://leonardodiegues.shinyapps.io/ponto-whatsapp/)
 
 ### Propósito
-A ferramenta tem como objetivo facilitar a marcação remota de ponto utilizando um grupo de WhatsApp como referência.
+A ferramenta tem como objetivo facilitar a marcação remota de ponto utilizando um grupo de __WhatsApp__ como referência.
 
 ### Instruções de uso
 1. A conversa do grupo do ponto deve ser exportada e anexada à aba upload
