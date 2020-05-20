@@ -47,8 +47,8 @@ shinyServer(function(input, output) {
     
     output$timetable_agg <- DT::renderDataTable({
         timetable() %>% 
-            group_by(nome) %>% 
-            summarise_at(vars(total_horas, total_minutos), sum, na.rm = TRUE) %>% 
+            group_by(mes, ano, nome) %>% 
+            summarise_at(vars(total_horas, total_minutos), sum, na.rm = TRUE) %>%
             customized_table()
     })
     

@@ -1,30 +1,67 @@
 library(dplyr)
+library(purrr)
 library(tidyr)
 library(stringr)
 library(magrittr)
 library(lubridate)
 
-WORDS_TO_CONSIDER <- list(
-    entering = c("entrada", "entrando", "entrei", "entrou"),
-    leaving = c("saida", "saindo", "out", "sai", "saiu")
+PATTERNS <- list(
+    ENTERING = c("entrada", "entrando", "entrei", "entrou"),
+    LEAVING = c("saida", "saindo", "sai", "saiu"),
+    YESTERDAY = "ontem \\d{1,2}:\\d{2}",
+    DMYHM = "\\d{1,2}/\\d{1,2}\\d{4} \\d{1,2}:\\d{2}",
+    HM = "\\d{1,2}:\\d{2}"
 )
 
 str_search <- function(string, term) {
     return(str_match(string = string, term)[1, 2])
 }
 
-timestamp_correction <- function(original_ts, message_content) {
-    correction <- str_search(message_content, "(\\d{1,2}:\\d{2})")
-    if (!is.na(correction)) {
-        hour(original_ts) <- as.numeric(str_search(correction, "(\\d{1,2}):"))
-        minute(original_ts) <- as.numeric(str_search(correction, ":(\\d{2})"))
+check_ts_correction <- function(msg) {
+    return(
+        case_when(
+            str_detect(msg, PATTERNS$YESTERDAY) ~ "full_y",
+            str_detect(msg, PATTERNS$DMYHM) ~ "full",
+            str_detect(msg, PATTERNS$HM) ~ "partial",
+            TRUE ~ "none"
+        )
+    )
+}
+
+timestamp_correction <- function(ts, msg) {
+    corrected <- ts
+    
+    correction_type <- check_ts_correction(msg)
+    
+    if (correction_type == "full") {
+        corrected <- msg %>%
+                str_search(paste0("(", PATTERNS$DMYHM, ")")) %>% 
+                ymd_hms()
+
+    } else if (!correction_type == "none") {
+        if (correction_type == "full_y") {
+            corrected <- corrected - days(1)
+        }
+        
+        replace_time <- msg %>%
+            str_search(paste0("(", PATTERNS$HM, ")")) %>% 
+            hm()
+        
+        corrected <- corrected %>% 
+            `hour<-`(hour(replace_time)) %>% 
+            `minute<-`(minute(replace_time))
     }
-    return(original_ts)
+    
+    return(corrected)
 }
 
 identify_entities <- function(txt) {
-    ts <- as_datetime(str_search(txt, "^(.*) -"), format = "%m/%d/%y, %H:%M")
-
+    ts <- as_datetime(str_search(txt, "^(.*) -"))
+    
+    if (is.na(ts)) {
+        ts <- as_datetime(str_search(txt, "^(.*) -"), format = "%m/%d/%y, %H:%M")
+    }
+    
     message_content <- txt %>%
         str_search(": (.*)$") %>% 
         tolower() %>% 
@@ -32,20 +69,20 @@ identify_entities <- function(txt) {
 
     return(
         list(
-            timestamp = ts,
+            ts = ts,
             nome = str_replace(str_search(txt, "- (.*):"), ":.*", ""),
             mensagem = message_content,
             acao = case_when(
-                message_content %in% WORDS_TO_CONSIDER$entering | 
+                message_content %in% PATTERNS$ENTERING | 
                     str_detect(
                         message_content,
-                        paste0(WORDS_TO_CONSIDER$entering, collapse = "|")
+                        paste0(PATTERNS$ENTERING, collapse = "|")
                     ) 
                 ~ "entrada",
-                message_content %in% WORDS_TO_CONSIDER$leaving |
+                message_content %in% PATTERNS$LEAVING |
                     str_detect(
                         message_content,
-                        paste0(WORDS_TO_CONSIDER$leaving, collapse = "|")
+                        paste0(PATTERNS$LEAVING, collapse = "|")
                     )
                 ~ "saida",
                 TRUE ~ "outro"
@@ -55,39 +92,39 @@ identify_entities <- function(txt) {
 }
 
 wpp_to_timetable <- function(path) {
-    return(
-        path %>% 
-            readLines() %>%
-            purrr::map_df(identify_entities) %>% 
-            filter(!is.na(nome)) %>% 
-            filter(!acao == "outro") %>% 
-            mutate(data = as_date(timestamp)) %>% 
-            mutate(corrected_timestamp = timestamp_correction(timestamp, mensagem)) %>% 
-            group_by(data, nome, acao) %>%
-            filter(corrected_timestamp == max(corrected_timestamp)) %>% 
-            select(-mensagem, -timestamp) %>% 
-            pivot_wider(names_from = acao, values_from = corrected_timestamp) %>% 
-            group_by(nome, data) %>% 
-            arrange(data) %>% 
-            mutate(timediff = difftime(saida, entrada, units = "hours")) %>% 
-            mutate(total_horas = floor(as.numeric(timediff))) %>% 
-            mutate(total_minutos = (as.numeric(timediff) - total_horas) * 60) %>% 
-            mutate(fmt = glue::glue("{total_horas}h{round(total_minutos)}")) %>% 
-            mutate_at(vars(entrada, saida), strftime, format = "%H:%M", tz = "UTC") %>% 
-            rename(tempo_total = fmt)
-        # %>% 
-        #     select(-timediff, -total_horas, -total_minutos)
-    )
-}
+    timetable <- path %>% 
+        readLines() %>% 
+        map_df(identify_entities) %>% 
+        filter(!is.na(nome)) %>% 
+        filter(!acao == "outro") %>% 
+        mutate(corrected_ts = modify2(ts, mensagem, timestamp_correction)) %>% 
+        mutate(data = as_date(corrected_ts))
+    
+    entries <- timetable %>% 
+        group_by(data, nome, acao) %>% 
+        filter(acao == "entrada") %>% 
+        filter(corrected_ts == min(corrected_ts))
 
-value_box <- function(texto, cor, icon, id){
-    HTML(paste0('<a id="', id,'" href="#" class="action-button">
-                  <div class = "value-box" style = "background-color:', cor, ';"> 
-                  <span class = "name">', texto, '</span>
-                  <div class="img_block">
-                    <div class="img_block_container">
-                      <img src="img/',icon,'">
-                    </div>
-                  </div>
-              </div></a>'))
+    exits <- timetable %>% 
+        group_by(data, nome, acao) %>%
+        filter(acao == "saida") %>% 
+        filter(corrected_ts == max(corrected_ts))
+    
+    return(
+        entries %>% 
+            bind_rows(exits) %>% 
+            arrange(data) %>% 
+            select(-mensagem, -ts) %>%
+            pivot_wider(names_from = acao, values_from = corrected_ts) %>%
+            group_by(nome, data) %>%
+            arrange(data) %>%
+            mutate(timediff = difftime(saida, entrada, units = "hours")) %>%
+            mutate(total_horas = floor(as.numeric(timediff))) %>%
+            mutate(total_minutos = (as.numeric(timediff) - total_horas) * 60) %>%
+            mutate(fmt = glue::glue("{total_horas}h{round(total_minutos)}")) %>%
+            mutate_at(vars(entrada, saida), strftime, format = "%H:%M", tz = "UTC") %>%
+            rename(tempo_total = fmt) %>%
+            mutate(mes = month(data)) %>%
+            mutate(ano = year(data))
+    )
 }
